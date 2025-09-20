@@ -1,0 +1,74 @@
+[package]
+name = "life_of_pi"
+version = "0.1.0"
+edition = "2021"
+authors = ["Austin Couch"]
+description = "Real-time Raspberry Pi 5 system diagnostics with web interface"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/austincouch/life_of_pi"
+repository = "https://github.com/austincouch/life_of_pi"
+keywords = ["raspberry-pi", "system-monitoring", "diagnostics", "embedded"]
+categories = ["embedded", "web-programming", "development-tools"]
+rust-version = "1.70"
+
+[[bin]]
+name = "life_of_pi"
+path = "src/main.rs"
+
+[lib]
+name = "life_of_pi"
+path = "src/lib.rs"
+
+[dependencies]
+# Core async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# System information
+sysinfo = "0.31"
+
+# Web framework and WebSocket support
+axum = { version = "0.7", features = ["ws"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# CLI parsing
+clap = { version = "4.0", features = ["derive"] }
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Time utilities
+tokio-stream = "0.1"
+futures-util = "0.3"
+async-trait = "0.1"
+
+# Additional dependencies for web handlers
+lazy_static = "1.4"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4"] }
+
+# GPIO support (optional for cross-compilation)
+rppal = { version = "0.14", optional = true }
+
+[features]
+default = []
+gpio = ["rppal"]
+
+[target.'cfg(target_arch = "aarch64")']
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+rppal = { version = "0.14", optional = true }
+
+# Development dependencies
+[dev-dependencies]
+tokio-test = "0.4"
+criterion = "0.5"

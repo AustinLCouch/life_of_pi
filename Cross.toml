@@ -1,0 +1,22 @@
+# Cross-compilation configuration for Life of Pi
+# Use with: cross build --target aarch64-unknown-linux-gnu --release
+
+[target.aarch64-unknown-linux-gnu]
+# Use Ubuntu 22.04 as the base for cross compilation
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge"
+
+# Enable GPIO feature for Raspberry Pi builds
+[target.aarch64-unknown-linux-gnu.env]
+passthrough = [
+    "CARGO_FEATURE_GPIO",
+]
+
+[build]
+# Default target for Raspberry Pi 5 (aarch64)
+default-target = "aarch64-unknown-linux-gnu"
+
+# Pre-build setup
+pre-build = [
+    "dpkg --add-architecture $CROSS_DEB_ARCH",
+    "apt-get update && apt-get install --assume-yes libc6-dev:$CROSS_DEB_ARCH",
+]
