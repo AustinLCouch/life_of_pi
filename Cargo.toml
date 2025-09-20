@@ -77,5 +77,3 @@ tokio-test = "0.4"
 [[bench]]
 name = "system_benchmarks"
 harness = false
-tokio-test = "0.4"
-criterion = "0.5"

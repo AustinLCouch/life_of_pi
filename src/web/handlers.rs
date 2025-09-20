@@ -1,6 +1,5 @@
 //! HTTP handlers for API endpoints.
 
-use crate::error::SystemError;
 use crate::metrics::{SystemCollector, MetricsProvider};
 use axum::{
     http::StatusCode,

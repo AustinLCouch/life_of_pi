@@ -1,6 +1,6 @@
 //! Web application router and middleware setup.
 
-use crate::error::{Result, SystemError};
+use crate::error::Result;
 use crate::web::config::WebConfig;
 use crate::web::handlers;
 use crate::web::websocket;

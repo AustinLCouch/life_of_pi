@@ -196,11 +196,12 @@ async fn test_network_interface_data() {
     
     for interface in &snapshot.network {
         assert!(!interface.interface.is_empty(), "Interface name should not be empty");
-        // Bytes counters should be non-negative
-        assert!(interface.tx_bytes >= 0, "Bytes sent should be non-negative");
-        assert!(interface.rx_bytes >= 0, "Bytes received should be non-negative");
-        assert!(interface.tx_packets >= 0, "Packets sent should be non-negative");
-        assert!(interface.rx_packets >= 0, "Packets received should be non-negative");
+        // Bytes and packet counters are unsigned integers (always non-negative)
+        // Just verify they exist by accessing them
+        let _ = interface.tx_bytes;
+        let _ = interface.rx_bytes;
+        let _ = interface.tx_packets;
+        let _ = interface.rx_packets;
     }
 }
 

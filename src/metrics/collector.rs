@@ -11,7 +11,6 @@ use std::fs;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use sysinfo::{System, Disks, Networks};
 use tokio::time;
-use tokio_stream::StreamExt;
 
 #[cfg(feature = "gpio")]
 use crate::metrics::gpio::{DefaultGpioProvider, GpioProvider};
@@ -398,7 +397,7 @@ impl MetricsProvider for SystemCollector {
     
     async fn start_stream(&mut self, interval_ms: u64) -> Result<BoxStream<'static, SystemSnapshot>> {
         let interval = Duration::from_millis(interval_ms);
-        let mut collector = SystemCollector::new()?;
+        let collector = SystemCollector::new()?;
         
         let stream = stream::unfold(
             (collector, time::interval(interval)),
@@ -439,6 +438,7 @@ impl SystemMonitor for SystemCollector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures_util::StreamExt;
     
     #[tokio::test]
     async fn test_system_collector_creation() {

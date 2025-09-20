@@ -192,7 +192,7 @@ async fn serve_command(cli: &Cli, args: &ServeArgs) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-async fn snapshot_command(cli: &Cli, args: &SnapshotArgs) -> Result<(), Box<dyn std::error::Error>> {
+async fn snapshot_command(_cli: &Cli, args: &SnapshotArgs) -> Result<(), Box<dyn std::error::Error>> {
     let mut collector = SystemCollector::new()?;
     let snapshot = collector.get_snapshot().await?;
     

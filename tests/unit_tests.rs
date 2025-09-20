@@ -1,5 +1,5 @@
 use life_of_pi::{
-    error::{Result, SystemError},
+    error::SystemError,
     metrics::{
         data::*,
         SystemCollector, SystemMonitor,
@@ -7,7 +7,6 @@ use life_of_pi::{
     WebConfig,
 };
 use serde_json;
-use std::time::Duration;
 
 /// Test SystemSnapshot serialization and deserialization
 #[test]

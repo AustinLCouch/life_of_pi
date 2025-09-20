@@ -2,8 +2,6 @@
 
 use crate::error::Result;
 use crate::metrics::data::SystemSnapshot;
-use std::pin::Pin;
-use tokio_stream::Stream;
 use futures_util::stream::BoxStream;
 
 /// Trait for collecting system metrics.
