@@ -15,15 +15,18 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use life_of_pi::{SystemMonitor, start_web_server};
+//! use life_of_pi::{SystemCollector, SystemMonitor, start_web_server, WebConfig};
 //! 
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let monitor = SystemMonitor::new()?;
-//!     let mut stream = monitor.start_collecting().await?;
+//!     let mut collector = SystemCollector::new()?;
+//!     let snapshot = collector.get_snapshot().await?;
+//!     println!("CPU Usage: {}%", snapshot.cpu.usage_percent);
 //!     
-//!     // Start web server on port 8080
-//!     start_web_server(8080, stream).await?;
+//!     // Start stream for web server
+//!     let stream = collector.start_collecting_with_interval(1000).await?;
+//!     let config = WebConfig::default().with_port(8080);
+//!     start_web_server(config, stream).await?;
 //!     Ok(())
 //! }
 //! ```

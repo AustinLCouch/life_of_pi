@@ -70,5 +70,12 @@ rppal = { version = "0.14", optional = true }
 
 # Development dependencies
 [dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+futures-util = "0.3"
+tokio-test = "0.4"
+
+[[bench]]
+name = "system_benchmarks"
+harness = false
 tokio-test = "0.4"
 criterion = "0.5"

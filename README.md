@@ -171,21 +171,58 @@ src/
 - **tokio** async runtime
 - For cross-compilation: `cross` and Docker
 
-## 🧪 Testing
+## 🧪 Testing & Benchmarking
 
+### Unit and Integration Tests
 ```bash
-# Run tests (without GPIO features)
+# Run unit tests
+cargo test --lib
+
+# Run integration tests with memory leak detection
+cargo test --test integration_tests
+
+# Run all tests
 cargo test
 
 # Run tests with all features
 cargo test --features gpio
+```
 
-# Run clippy for linting
-cargo clippy
+### Performance Benchmarks
+```bash
+# Run comprehensive performance benchmarks
+cargo bench --bench system_benchmarks
 
+# Quick benchmark with smaller sample size
+cargo bench --bench system_benchmarks -- --sample-size 10
+
+# Benchmark specific functions
+cargo bench --bench system_benchmarks -- json_serialization
+```
+
+### Code Quality
+```bash
 # Format code
 cargo fmt
+
+# Run clippy for linting
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Security audit
+cargo audit
+
+# Check licenses and dependencies
+cargo deny check
 ```
+
+### CI/CD Pipeline
+The project includes a comprehensive GitHub Actions CI pipeline that:
+- Tests on multiple Rust versions (stable, beta, nightly)
+- Cross-compiles for Raspberry Pi targets
+- Runs security audits and license checks
+- Generates code coverage reports
+- Performs performance benchmarks
+- Builds release artifacts
 
 ## 📝 License
 
