@@ -66,7 +66,7 @@ pub trait GpioProvider {
     fn read_pin(&mut self, pin: u8) -> Result<PinState>;
 }
 
-#[cfg(feature = "gpio")]
+#[cfg(all(feature = "gpio", target_os = "linux"))]
 mod raspberry_pi {
     use super::*;
     use rppal::gpio::{Gpio, Mode};
@@ -108,20 +108,29 @@ mod raspberry_pi {
                         let function = match pin.mode() {
                             Mode::Input => PinFunction::Input,
                             Mode::Output => PinFunction::Output,
-                            Mode::Pwm => PinFunction::Pwm,
-                            Mode::Spi => PinFunction::Spi,
-                            Mode::I2c => PinFunction::I2c,
-                            Mode::Uart => PinFunction::Uart,
-                            Mode::Alt(alt) => PinFunction::Alt(alt),
+                            // Common Alt mode mappings for Raspberry Pi:
+                            // Alt0: I2C, SPI, UART depending on pin
+                            // Alt1: PWM on some pins
+                            // Alt2-Alt8: Various other functions
+                            Mode::Alt0 => PinFunction::Alt(0), // Could be I2C/SPI/UART
+                            Mode::Alt1 => PinFunction::Alt(1), // Could be PWM
+                            Mode::Alt2 => PinFunction::Alt(2),
+                            Mode::Alt3 => PinFunction::Alt(3),
+                            Mode::Alt4 => PinFunction::Alt(4),
+                            Mode::Alt5 => PinFunction::Alt(5),
+                            Mode::Alt6 => PinFunction::Alt(6),
+                            Mode::Alt7 => PinFunction::Alt(7),
+                            Mode::Alt8 => PinFunction::Alt(8),
+                            Mode::Null => PinFunction::Unknown,
                         };
 
                         let state = match pin.mode() {
                             Mode::Input => PinState::Input,
                             Mode::Output => {
-                                if pin.is_set_high() {
-                                    PinState::High
-                                } else {
-                                    PinState::Low
+                                // Use read() method which returns Level::High or Level::Low
+                                match pin.read() {
+                                    rppal::gpio::Level::High => PinState::High,
+                                    rppal::gpio::Level::Low => PinState::Low,
                                 }
                             }
                             _ => PinState::Unknown,
@@ -165,10 +174,9 @@ mod raspberry_pi {
             let state = match gpio_pin.mode() {
                 Mode::Input => PinState::Input,
                 Mode::Output => {
-                    if gpio_pin.is_set_high() {
-                        PinState::High
-                    } else {
-                        PinState::Low
+                    match gpio_pin.read() {
+                        rppal::gpio::Level::High => PinState::High,
+                        rppal::gpio::Level::Low => PinState::Low,
                     }
                 }
                 _ => PinState::Unknown,
@@ -179,7 +187,7 @@ mod raspberry_pi {
     }
 }
 
-#[cfg(not(feature = "gpio"))]
+#[cfg(not(all(feature = "gpio", target_os = "linux")))]
 mod mock {
     use super::*;
 
@@ -216,10 +224,10 @@ mod mock {
 }
 
 // Re-export the appropriate GPIO provider
-#[cfg(feature = "gpio")]
+#[cfg(all(feature = "gpio", target_os = "linux"))]
 pub use raspberry_pi::RaspberryPiGpio as DefaultGpioProvider;
 
-#[cfg(not(feature = "gpio"))]
+#[cfg(not(all(feature = "gpio", target_os = "linux")))]
 pub use mock::MockGpio as DefaultGpioProvider;
 
 impl Default for GpioStatus {
@@ -253,9 +261,10 @@ mod tests {
         assert_eq!(state, deserialized);
     }
 
-    #[cfg(not(feature = "gpio"))]
+    #[cfg(not(all(feature = "gpio", target_os = "linux")))]
     #[test]
     fn test_mock_gpio_provider() {
+        use crate::metrics::gpio::mock::MockGpio;
         let mut provider = MockGpio::new().unwrap();
         let status = provider.read_gpio_status().unwrap();
         assert!(!status.gpio_available);

@@ -35,11 +35,17 @@ jobs:
     - name: Check formatting
       run: cargo fmt --all -- --check
 
-    - name: Check with clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
+    - name: Check with clippy (no GPIO on Linux runner)
+      run: cargo clippy --all-targets -- -D warnings
+    
+    - name: Check with clippy (with GPIO features)
+      run: cargo clippy --all-targets --features gpio -- -D warnings
 
     - name: Run tests
       run: cargo test --verbose
+      
+    - name: Run tests with GPIO feature (mock implementation)
+      run: cargo test --verbose --features gpio
 
   cross-compile:
     name: Cross Compile for Raspberry Pi
@@ -74,7 +80,7 @@ jobs:
       run: cargo install cross --git https://github.com/cross-rs/cross
 
     - name: Build for ${{ matrix.target }}
-      run: cross build --target ${{ matrix.target }} --release
+      run: cross build --target ${{ matrix.target }} --release --features gpio
 
     - name: Upload binary
       uses: actions/upload-artifact@v4

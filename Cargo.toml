@@ -57,16 +57,13 @@ lazy_static = "1.4"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4"] }
 
-# GPIO support (optional for cross-compilation)
-rppal = { version = "0.14", optional = true }
+# Platform-specific dependencies
+[target.'cfg(target_os = "linux")'.dependencies]
+rppal = { version = "0.22", optional = true }
 
 [features]
 default = []
 gpio = ["rppal"]
-
-[target.'cfg(target_arch = "aarch64")']
-[target.'cfg(target_arch = "aarch64")'.dependencies]
-rppal = { version = "0.14", optional = true }
 
 # Development dependencies
 [dev-dependencies]
