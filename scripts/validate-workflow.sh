@@ -5,7 +5,7 @@
 
 set -e
 
-echo "🔍 Validating Life of Pi GitHub Actions workflow components..."
+echo "🔍 Validating Life of Pi simplified GitHub Actions workflow..."
 
 # Colors for output
 RED='\033[0;31m'
@@ -27,7 +27,7 @@ print_warning() {
     echo -e "${YELLOW}⚠️  $1${NC}"
 }
 
-echo "📋 Running workflow validation checks..."
+echo "📋 Running essential workflow checks..."
 
 # 1. Check formatting
 echo "🎨 Checking code formatting..."

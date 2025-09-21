@@ -72,7 +72,7 @@ pub struct MemoryInfo {
 }
 
 /// Swap memory information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SwapInfo {
     /// Total swap space in bytes
     pub total_bytes: u64,
@@ -83,7 +83,7 @@ pub struct SwapInfo {
 }
 
 /// Memory usage breakdown by type.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MemoryBreakdown {
     /// Buffers in bytes
     pub buffers_bytes: u64,
@@ -140,7 +140,7 @@ pub struct NetworkInfo {
 }
 
 /// Temperature sensor information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TemperatureInfo {
     /// CPU temperature in Celsius
     pub cpu_celsius: Option<f32>,
@@ -153,7 +153,7 @@ pub struct TemperatureInfo {
 }
 
 /// General system information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SystemInfo {
     /// System hostname
     pub hostname: String,
@@ -169,6 +169,12 @@ pub struct SystemInfo {
     pub boot_time: u64,
     /// Number of processes running
     pub process_count: u64,
+}
+
+impl Default for SystemSnapshot {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SystemSnapshot {
@@ -229,47 +235,3 @@ impl Default for MemoryInfo {
     }
 }
 
-impl Default for SwapInfo {
-    fn default() -> Self {
-        Self {
-            total_bytes: 0,
-            used_bytes: 0,
-            free_bytes: 0,
-        }
-    }
-}
-
-impl Default for MemoryBreakdown {
-    fn default() -> Self {
-        Self {
-            buffers_bytes: 0,
-            cached_bytes: 0,
-            shared_bytes: 0,
-        }
-    }
-}
-
-impl Default for TemperatureInfo {
-    fn default() -> Self {
-        Self {
-            cpu_celsius: None,
-            gpu_celsius: None,
-            thermal_zones: HashMap::new(),
-            is_throttling: false,
-        }
-    }
-}
-
-impl Default for SystemInfo {
-    fn default() -> Self {
-        Self {
-            hostname: String::new(),
-            os_name: String::new(),
-            os_version: String::new(),
-            kernel_version: String::new(),
-            uptime_seconds: 0,
-            boot_time: 0,
-            process_count: 0,
-        }
-    }
-}

@@ -38,37 +38,37 @@ impl WebConfig {
             ..Default::default()
         }
     }
-    
+
     /// Set the host for the web server.
     pub fn with_host(mut self, host: impl Into<String>) -> Self {
         self.host = host.into();
         self
     }
-    
+
     /// Set the port for the web server.
     pub fn with_port(mut self, port: u16) -> Self {
         self.port = port;
         self
     }
-    
+
     /// Enable or disable CORS.
     pub fn with_cors(mut self, enable_cors: bool) -> Self {
         self.enable_cors = enable_cors;
         self
     }
-    
+
     /// Set the static files path.
     pub fn with_static_path(mut self, path: Option<String>) -> Self {
         self.static_path = path;
         self
     }
-    
+
     /// Set the maximum number of WebSocket connections.
     pub fn with_max_websocket_connections(mut self, max: usize) -> Self {
         self.max_websocket_connections = max;
         self
     }
-    
+
     /// Get the full bind address.
     pub fn bind_address(&self) -> String {
         format!("{}:{}", self.host, self.port)

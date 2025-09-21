@@ -1,19 +1,18 @@
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
-use life_of_pi::{
-    SystemCollector, SystemMonitor,
-    metrics::data::SystemSnapshot,
-};
-use serde_json;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use life_of_pi::{metrics::data::SystemSnapshot, SystemCollector, SystemMonitor};
 use std::time::Duration;
 
 /// Benchmark system snapshot collection
 fn bench_snapshot_collection(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().expect("Should create tokio runtime");
-    
+
     c.bench_function("system_snapshot_collection", |b| {
         b.to_async(&rt).iter(|| async {
             let mut collector = SystemCollector::new().expect("Should create collector");
-            collector.get_snapshot().await.expect("Should collect snapshot")
+            collector
+                .get_snapshot()
+                .await
+                .expect("Should collect snapshot")
         })
     });
 }
@@ -21,48 +20,48 @@ fn bench_snapshot_collection(c: &mut Criterion) {
 /// Benchmark JSON serialization of system snapshots
 fn bench_json_serialization(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().expect("Should create tokio runtime");
-    
+
     // Collect a real snapshot to benchmark serialization
     let snapshot = rt.block_on(async {
         let mut collector = SystemCollector::new().expect("Should create collector");
-        collector.get_snapshot().await.expect("Should collect snapshot")
+        collector
+            .get_snapshot()
+            .await
+            .expect("Should collect snapshot")
     });
-    
+
     c.bench_function("json_serialization", |b| {
-        b.iter(|| {
-            serde_json::to_string(&snapshot).expect("Should serialize")
-        })
+        b.iter(|| serde_json::to_string(&snapshot).expect("Should serialize"))
     });
-    
+
     c.bench_function("json_pretty_serialization", |b| {
-        b.iter(|| {
-            serde_json::to_string_pretty(&snapshot).expect("Should serialize pretty")
-        })
+        b.iter(|| serde_json::to_string_pretty(&snapshot).expect("Should serialize pretty"))
     });
 }
 
 /// Benchmark JSON deserialization
 fn bench_json_deserialization(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().expect("Should create tokio runtime");
-    
+
     // Create a JSON string to deserialize
     let json_string = rt.block_on(async {
         let mut collector = SystemCollector::new().expect("Should create collector");
-        let snapshot = collector.get_snapshot().await.expect("Should collect snapshot");
+        let snapshot = collector
+            .get_snapshot()
+            .await
+            .expect("Should collect snapshot");
         serde_json::to_string(&snapshot).expect("Should serialize")
     });
-    
+
     c.bench_function("json_deserialization", |b| {
-        b.iter(|| {
-            serde_json::from_str::<SystemSnapshot>(&json_string).expect("Should deserialize")
-        })
+        b.iter(|| serde_json::from_str::<SystemSnapshot>(&json_string).expect("Should deserialize"))
     });
 }
 
 /// Benchmark concurrent snapshot collection
 fn bench_concurrent_collection(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().expect("Should create tokio runtime");
-    
+
     for concurrency in [1, 2, 4, 8].iter() {
         c.bench_with_input(
             BenchmarkId::new("concurrent_collection", concurrency),
@@ -70,18 +69,22 @@ fn bench_concurrent_collection(c: &mut Criterion) {
             |b, &concurrency| {
                 b.to_async(&rt).iter(|| async move {
                     let mut handles = Vec::new();
-                    
+
                     for _ in 0..concurrency {
                         let handle = tokio::spawn(async move {
-                            let mut collector = SystemCollector::new().expect("Should create collector");
-                            collector.get_snapshot().await.expect("Should collect snapshot")
+                            let mut collector =
+                                SystemCollector::new().expect("Should create collector");
+                            collector
+                                .get_snapshot()
+                                .await
+                                .expect("Should collect snapshot")
                         });
                         handles.push(handle);
                     }
-                    
+
                     futures_util::future::join_all(handles).await
                 })
-            }
+            },
         );
     }
 }
@@ -89,14 +92,17 @@ fn bench_concurrent_collection(c: &mut Criterion) {
 /// Benchmark memory allocation during collection
 fn bench_memory_overhead(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().expect("Should create tokio runtime");
-    
+
     c.bench_function("repeated_collection_memory", |b| {
         b.to_async(&rt).iter(|| async {
             let mut collector = SystemCollector::new().expect("Should create collector");
-            
+
             // Collect multiple snapshots to test memory usage
             for _ in 0..10 {
-                let _snapshot = collector.get_snapshot().await.expect("Should collect snapshot");
+                let _snapshot = collector
+                    .get_snapshot()
+                    .await
+                    .expect("Should collect snapshot");
             }
         })
     });
@@ -105,28 +111,30 @@ fn bench_memory_overhead(c: &mut Criterion) {
 /// Benchmark snapshot data structure cloning
 fn bench_snapshot_clone(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().expect("Should create tokio runtime");
-    
+
     let snapshot = rt.block_on(async {
         let mut collector = SystemCollector::new().expect("Should create collector");
-        collector.get_snapshot().await.expect("Should collect snapshot")
+        collector
+            .get_snapshot()
+            .await
+            .expect("Should collect snapshot")
     });
-    
-    c.bench_function("snapshot_clone", |b| {
-        b.iter(|| {
-            snapshot.clone()
-        })
-    });
+
+    c.bench_function("snapshot_clone", |b| b.iter(|| snapshot.clone()));
 }
 
 /// Benchmark WebSocket message preparation
 fn bench_websocket_message_prep(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().expect("Should create tokio runtime");
-    
+
     let snapshot = rt.block_on(async {
         let mut collector = SystemCollector::new().expect("Should create collector");
-        collector.get_snapshot().await.expect("Should collect snapshot")
+        collector
+            .get_snapshot()
+            .await
+            .expect("Should collect snapshot")
     });
-    
+
     c.bench_function("websocket_message_prep", |b| {
         b.iter(|| {
             // Simulate preparing a WebSocket message
@@ -139,16 +147,14 @@ fn bench_websocket_message_prep(c: &mut Criterion) {
 /// Benchmark system collector initialization
 fn bench_collector_init(c: &mut Criterion) {
     c.bench_function("collector_initialization", |b| {
-        b.iter(|| {
-            SystemCollector::new().expect("Should create collector")
-        })
+        b.iter(|| SystemCollector::new().expect("Should create collector"))
     });
 }
 
 /// Benchmark different collection intervals
 fn bench_collection_intervals(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().expect("Should create tokio runtime");
-    
+
     for interval_ms in [100, 250, 500, 1000].iter() {
         c.bench_with_input(
             BenchmarkId::new("collection_with_interval", interval_ms),
@@ -156,14 +162,18 @@ fn bench_collection_intervals(c: &mut Criterion) {
             |b, &interval_ms| {
                 b.to_async(&rt).iter(|| async move {
                     let mut collector = SystemCollector::new().expect("Should create collector");
-                    
+
                     // Simulate collecting a few snapshots with the given interval
                     for _ in 0..3 {
-                        let _snapshot = collector.get_snapshot().await.expect("Should collect snapshot");
-                        tokio::time::sleep(Duration::from_millis(interval_ms / 10)).await; // Shorter sleep for benchmarking
+                        let _snapshot = collector
+                            .get_snapshot()
+                            .await
+                            .expect("Should collect snapshot");
+                        tokio::time::sleep(Duration::from_millis(interval_ms / 10)).await;
+                        // Shorter sleep for benchmarking
                     }
                 })
-            }
+            },
         );
     }
 }
@@ -171,12 +181,15 @@ fn bench_collection_intervals(c: &mut Criterion) {
 /// Benchmark temperature parsing (Raspberry Pi specific)
 fn bench_temperature_parsing(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().expect("Should create tokio runtime");
-    
+
     c.bench_function("temperature_data_processing", |b| {
         b.to_async(&rt).iter(|| async {
             let mut collector = SystemCollector::new().expect("Should create collector");
-            let snapshot = collector.get_snapshot().await.expect("Should collect snapshot");
-            
+            let snapshot = collector
+                .get_snapshot()
+                .await
+                .expect("Should collect snapshot");
+
             // Access temperature data to trigger any lazy evaluation
             let _cpu_temp = snapshot.temperature.cpu_celsius;
             let _gpu_temp = snapshot.temperature.gpu_celsius;
@@ -189,12 +202,15 @@ fn bench_temperature_parsing(c: &mut Criterion) {
 /// Benchmark CPU metrics collection
 fn bench_cpu_metrics(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().expect("Should create tokio runtime");
-    
+
     c.bench_function("cpu_metrics_collection", |b| {
         b.to_async(&rt).iter(|| async {
             let mut collector = SystemCollector::new().expect("Should create collector");
-            let snapshot = collector.get_snapshot().await.expect("Should collect snapshot");
-            
+            let snapshot = collector
+                .get_snapshot()
+                .await
+                .expect("Should collect snapshot");
+
             // Access CPU-specific data
             let _model = &snapshot.cpu.model;
             let _cores = snapshot.cpu.cores;

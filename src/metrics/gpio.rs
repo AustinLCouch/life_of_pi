@@ -58,10 +58,10 @@ pub enum PinFunction {
 pub trait GpioProvider {
     /// Read the current state of all GPIO pins.
     fn read_gpio_status(&mut self) -> Result<GpioStatus>;
-    
+
     /// Check if a specific pin is available.
     fn is_pin_available(&self, pin: u8) -> bool;
-    
+
     /// Read the state of a specific pin.
     fn read_pin(&mut self, pin: u8) -> Result<PinState>;
 }
@@ -71,35 +71,36 @@ mod raspberry_pi {
     use super::*;
     use rppal::gpio::{Gpio, Mode};
     use std::sync::Arc;
-    
+
     /// Raspberry Pi GPIO provider using rppal.
     pub struct RaspberryPiGpio {
         gpio: Arc<Gpio>,
         // Cache available pins to avoid repeated system calls
         available_pins: Vec<u8>,
     }
-    
+
     impl RaspberryPiGpio {
         /// Create a new Raspberry Pi GPIO provider.
         pub fn new() -> Result<Self> {
-            let gpio = Gpio::new()
-                .map_err(|e| SystemError::gpio_error(format!("Failed to initialize GPIO: {}", e)))?;
-            
+            let gpio = Gpio::new().map_err(|e| {
+                SystemError::gpio_error(format!("Failed to initialize GPIO: {}", e))
+            })?;
+
             // Standard Raspberry Pi GPIO pins (0-27 are typically available)
             let available_pins: Vec<u8> = (0..=27).collect();
-            
+
             Ok(Self {
                 gpio: Arc::new(gpio),
                 available_pins,
             })
         }
     }
-    
+
     impl GpioProvider for RaspberryPiGpio {
         fn read_gpio_status(&mut self) -> Result<GpioStatus> {
             let mut pin_states = HashMap::new();
             let mut pin_functions = HashMap::new();
-            
+
             for &pin_num in &self.available_pins {
                 // Attempt to get pin info without claiming the pin
                 match self.gpio.get(pin_num) {
@@ -113,7 +114,7 @@ mod raspberry_pi {
                             Mode::Uart => PinFunction::Uart,
                             Mode::Alt(alt) => PinFunction::Alt(alt),
                         };
-                        
+
                         let state = match pin.mode() {
                             Mode::Input => PinState::Input,
                             Mode::Output => {
@@ -125,7 +126,7 @@ mod raspberry_pi {
                             }
                             _ => PinState::Unknown,
                         };
-                        
+
                         pin_states.insert(pin_num, state);
                         pin_functions.insert(pin_num, function);
                     }
@@ -136,7 +137,7 @@ mod raspberry_pi {
                     }
                 }
             }
-            
+
             Ok(GpioStatus {
                 available_pins: self.available_pins.clone(),
                 pin_states,
@@ -144,19 +145,23 @@ mod raspberry_pi {
                 gpio_available: true,
             })
         }
-        
+
         fn is_pin_available(&self, pin: u8) -> bool {
             self.available_pins.contains(&pin)
         }
-        
+
         fn read_pin(&mut self, pin: u8) -> Result<PinState> {
             if !self.is_pin_available(pin) {
-                return Err(SystemError::gpio_error(format!("Pin {} is not available", pin)));
+                return Err(SystemError::gpio_error(format!(
+                    "Pin {} is not available",
+                    pin
+                )));
             }
-            
-            let gpio_pin = self.gpio.get(pin)
-                .map_err(|e| SystemError::gpio_error(format!("Failed to access pin {}: {}", pin, e)))?;
-            
+
+            let gpio_pin = self.gpio.get(pin).map_err(|e| {
+                SystemError::gpio_error(format!("Failed to access pin {}: {}", pin, e))
+            })?;
+
             let state = match gpio_pin.mode() {
                 Mode::Input => PinState::Input,
                 Mode::Output => {
@@ -168,7 +173,7 @@ mod raspberry_pi {
                 }
                 _ => PinState::Unknown,
             };
-            
+
             Ok(state)
         }
     }
@@ -177,16 +182,16 @@ mod raspberry_pi {
 #[cfg(not(feature = "gpio"))]
 mod mock {
     use super::*;
-    
+
     /// Mock GPIO provider for systems without GPIO support.
     pub struct MockGpio;
-    
+
     impl MockGpio {
         pub fn new() -> Result<Self> {
             Ok(Self)
         }
     }
-    
+
     impl GpioProvider for MockGpio {
         fn read_gpio_status(&mut self) -> Result<GpioStatus> {
             Ok(GpioStatus {
@@ -196,14 +201,14 @@ mod mock {
                 gpio_available: false,
             })
         }
-        
+
         fn is_pin_available(&self, _pin: u8) -> bool {
             false
         }
-        
+
         fn read_pin(&mut self, pin: u8) -> Result<PinState> {
             Err(SystemError::gpio_error(format!(
-                "GPIO not available on this system (attempted to read pin {})", 
+                "GPIO not available on this system (attempted to read pin {})",
                 pin
             )))
         }
@@ -231,7 +236,7 @@ impl Default for GpioStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_gpio_status_default() {
         let status = GpioStatus::default();
@@ -239,7 +244,7 @@ mod tests {
         assert!(status.available_pins.is_empty());
         assert!(status.pin_states.is_empty());
     }
-    
+
     #[test]
     fn test_pin_state_serialization() {
         let state = PinState::High;
@@ -247,7 +252,7 @@ mod tests {
         let deserialized: PinState = serde_json::from_str(&serialized).unwrap();
         assert_eq!(state, deserialized);
     }
-    
+
     #[cfg(not(feature = "gpio"))]
     #[test]
     fn test_mock_gpio_provider() {

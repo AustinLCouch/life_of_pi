@@ -1,12 +1,8 @@
 use life_of_pi::{
     error::SystemError,
-    metrics::{
-        data::*,
-        SystemCollector, SystemMonitor,
-    },
+    metrics::{data::*, SystemCollector, SystemMonitor},
     WebConfig,
 };
-use serde_json;
 
 /// Test SystemSnapshot serialization and deserialization
 #[test]
@@ -28,14 +24,14 @@ fn test_system_snapshot_serialization() {
             },
         },
         memory: MemoryInfo {
-            total_bytes: 8 * 1024 * 1024 * 1024, // 8GB
+            total_bytes: 8 * 1024 * 1024 * 1024,     // 8GB
             available_bytes: 4 * 1024 * 1024 * 1024, // 4GB
-            used_bytes: 4 * 1024 * 1024 * 1024, // 4GB
+            used_bytes: 4 * 1024 * 1024 * 1024,      // 4GB
             usage_percent: 50.0,
             swap: SwapInfo {
                 total_bytes: 2 * 1024 * 1024 * 1024, // 2GB
-                used_bytes: 512 * 1024 * 1024, // 512MB
-                free_bytes: 1536 * 1024 * 1024, // 1.5GB
+                used_bytes: 512 * 1024 * 1024,       // 512MB
+                free_bytes: 1536 * 1024 * 1024,      // 1.5GB
             },
             breakdown: MemoryBreakdown {
                 buffers_bytes: 100 * 1024 * 1024, // 100MB
@@ -47,9 +43,9 @@ fn test_system_snapshot_serialization() {
             device: "/dev/sda1".to_string(),
             mount_point: "/".to_string(),
             filesystem: "ext4".to_string(),
-            total_bytes: 500 * 1024 * 1024 * 1024, // 500GB
+            total_bytes: 500 * 1024 * 1024 * 1024,     // 500GB
             available_bytes: 250 * 1024 * 1024 * 1024, // 250GB
-            used_bytes: 250 * 1024 * 1024 * 1024, // 250GB
+            used_bytes: 250 * 1024 * 1024 * 1024,      // 250GB
             usage_percent: 50.0,
         }],
         network: vec![NetworkInfo {
@@ -96,7 +92,8 @@ fn test_system_snapshot_serialization() {
     assert!(json.contains("45.5"));
 
     // Test deserialization from JSON
-    let deserialized: SystemSnapshot = serde_json::from_str(&json).expect("Should deserialize from JSON");
+    let deserialized: SystemSnapshot =
+        serde_json::from_str(&json).expect("Should deserialize from JSON");
     assert_eq!(deserialized.cpu.model, "Test CPU");
     assert_eq!(deserialized.system.hostname, "test-pi");
     assert_eq!(deserialized.temperature.cpu_celsius, Some(45.5));
@@ -111,7 +108,7 @@ fn test_load_average() {
         five_minutes: 1.2,
         fifteen_minutes: 1.0,
     };
-    
+
     assert_eq!(load_avg.one_minute, 1.5);
     assert_eq!(load_avg.five_minutes, 1.2);
     assert_eq!(load_avg.fifteen_minutes, 1.0);
@@ -126,7 +123,7 @@ fn test_load_average() {
 #[test]
 fn test_memory_calculations() {
     let total = 8 * 1024 * 1024 * 1024_u64; // 8GB
-    let used = 4 * 1024 * 1024 * 1024_u64;  // 4GB
+    let used = 4 * 1024 * 1024 * 1024_u64; // 4GB
     let available = total - used;
     let usage_percent = (used as f32 / total as f32) * 100.0;
 
@@ -148,7 +145,7 @@ fn test_memory_calculations() {
 #[test]
 fn test_storage_calculations() {
     let total = 1000 * 1024 * 1024 * 1024_u64; // 1TB
-    let used = 300 * 1024 * 1024 * 1024_u64;   // 300GB
+    let used = 300 * 1024 * 1024 * 1024_u64; // 300GB
     let available = total - used;
     let usage_percent = (used as f32 / total as f32) * 100.0;
 
@@ -162,7 +159,11 @@ fn test_storage_calculations() {
         usage_percent,
     };
 
-    assert!((usage_percent - 30.0).abs() < 0.001, "Usage percent should be approximately 30.0, got {}", usage_percent);
+    assert!(
+        (usage_percent - 30.0).abs() < 0.001,
+        "Usage percent should be approximately 30.0, got {}",
+        usage_percent
+    );
     assert_eq!(storage.filesystem, "ext4");
     assert_eq!(storage.mount_point, "/");
 }
@@ -197,7 +198,7 @@ fn test_web_config() {
 
     assert_eq!(config.host, "127.0.0.1");
     assert_eq!(config.port, 9090);
-    assert_eq!(config.enable_cors, false);
+    assert!(!config.enable_cors);
     assert_eq!(config.max_websocket_connections, 50);
     assert_eq!(config.bind_address(), "127.0.0.1:9090");
 }
@@ -211,14 +212,23 @@ async fn test_system_collector_creation() {
     if let Ok(mut collector) = result {
         // Test that we can collect a snapshot
         let snapshot_result = collector.get_snapshot().await;
-        assert!(snapshot_result.is_ok(), "Should be able to collect system snapshot");
+        assert!(
+            snapshot_result.is_ok(),
+            "Should be able to collect system snapshot"
+        );
 
         if let Ok(snapshot) = snapshot_result {
             // Basic sanity checks
             assert!(snapshot.timestamp > 0, "Timestamp should be set");
             assert!(snapshot.cpu.cores > 0, "Should detect CPU cores");
-            assert!(snapshot.memory.total_bytes > 0, "Should detect system memory");
-            assert!(!snapshot.system.hostname.is_empty(), "Should detect hostname");
+            assert!(
+                snapshot.memory.total_bytes > 0,
+                "Should detect system memory"
+            );
+            assert!(
+                !snapshot.system.hostname.is_empty(),
+                "Should detect hostname"
+            );
             assert!(!snapshot.system.os_name.is_empty(), "Should detect OS name");
         }
     }
@@ -253,8 +263,8 @@ fn test_network_info() {
         mac_address: Some("aa:bb:cc:dd:ee:ff".to_string()),
         ipv4_addresses: vec!["192.168.1.100".to_string(), "10.0.0.1".to_string()],
         ipv6_addresses: vec!["fe80::1".to_string()],
-        tx_bytes: 1024 * 1024,      // 1MB
-        rx_bytes: 2 * 1024 * 1024,  // 2MB
+        tx_bytes: 1024 * 1024,     // 1MB
+        rx_bytes: 2 * 1024 * 1024, // 2MB
         tx_packets: 1000,
         rx_packets: 2000,
         tx_errors: 0,
@@ -296,11 +306,16 @@ fn test_gpio_functionality() {
     use life_of_pi::metrics::gpio::{DefaultGpioProvider, GpioProvider};
 
     let mut provider = DefaultGpioProvider::new().expect("GPIO provider should initialize");
-    let status = provider.read_gpio_status().expect("Should read GPIO status");
-    
+    let status = provider
+        .read_gpio_status()
+        .expect("Should read GPIO status");
+
     // This test will only run when GPIO feature is enabled
     // Behavior depends on whether running on actual Raspberry Pi or mock
-    assert!(status.available_pins.len() >= 0, "Should have valid pin count");
+    assert!(
+        status.available_pins.len() >= 0,
+        "Should have valid pin count"
+    );
     assert!(status.pin_states.len() >= 0, "Should have valid pin states");
 }
 

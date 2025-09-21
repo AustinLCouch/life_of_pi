@@ -2,8 +2,8 @@
 
 use crate::error::{Result, SystemError};
 use crate::metrics::SystemSnapshot;
-use axum::{extract::WebSocketUpgrade, response::Response};
 use axum::extract::ws::{Message, WebSocket};
+use axum::{extract::WebSocketUpgrade, response::Response};
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,7 +16,7 @@ lazy_static::lazy_static! {
         let (tx, _rx) = broadcast::channel(100);
         tx
     };
-    
+
     static ref CONNECTED_CLIENTS: Arc<RwLock<HashMap<String, Client>>> = {
         Arc::new(RwLock::new(HashMap::new()))
     };
@@ -37,21 +37,24 @@ pub async fn websocket_handler(ws: WebSocketUpgrade) -> Response {
 async fn handle_websocket(socket: WebSocket) {
     let client_id = uuid::Uuid::new_v4().to_string();
     info!("WebSocket client connected: {}", client_id);
-    
+
     // Add client to connected clients list
     {
         let mut clients = CONNECTED_CLIENTS.write().await;
-        clients.insert(client_id.clone(), Client {
-            id: client_id.clone(),
-            connected_at: std::time::SystemTime::now(),
-        });
+        clients.insert(
+            client_id.clone(),
+            Client {
+                id: client_id.clone(),
+                connected_at: std::time::SystemTime::now(),
+            },
+        );
     }
-    
+
     let (mut sender, mut receiver) = socket.split();
-    
+
     // Subscribe to broadcast channel
     let mut rx = BROADCAST_TX.subscribe();
-    
+
     // Spawn a task to handle incoming messages from the client
     let client_id_recv = client_id.clone();
     let recv_task = tokio::spawn(async move {
@@ -81,7 +84,7 @@ async fn handle_websocket(socket: WebSocket) {
             }
         }
     });
-    
+
     // Spawn a task to send system snapshots to the client
     let client_id_send = client_id.clone();
     let send_task = tokio::spawn(async move {
@@ -94,12 +97,15 @@ async fn handle_websocket(socket: WebSocket) {
                     }
                 }
                 Err(e) => {
-                    error!("Failed to serialize snapshot for client {}: {}", client_id_send, e);
+                    error!(
+                        "Failed to serialize snapshot for client {}: {}",
+                        client_id_send, e
+                    );
                 }
             }
         }
     });
-    
+
     // Wait for either task to complete
     tokio::select! {
         _ = recv_task => {
@@ -109,13 +115,13 @@ async fn handle_websocket(socket: WebSocket) {
             debug!("Send task completed for client {}", client_id);
         }
     }
-    
+
     // Remove client from connected clients list
     {
         let mut clients = CONNECTED_CLIENTS.write().await;
         clients.remove(&client_id);
     }
-    
+
     info!("WebSocket client disconnected: {}", client_id);
 }
 
@@ -125,22 +131,25 @@ pub async fn broadcast_snapshot(snapshot: SystemSnapshot) -> Result<()> {
         let clients = CONNECTED_CLIENTS.read().await;
         clients.len()
     };
-    
+
     if client_count > 0 {
         match BROADCAST_TX.send(snapshot) {
             Ok(receiver_count) => {
-                debug!("Broadcasted snapshot to {} receivers ({} connected clients)", 
-                    receiver_count, client_count);
+                debug!(
+                    "Broadcasted snapshot to {} receivers ({} connected clients)",
+                    receiver_count, client_count
+                );
             }
             Err(e) => {
                 warn!("Failed to broadcast snapshot: {}", e);
                 return Err(SystemError::web_server_error(format!(
-                    "Failed to broadcast snapshot: {}", e
+                    "Failed to broadcast snapshot: {}",
+                    e
                 )));
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -154,13 +163,10 @@ pub async fn get_connected_client_count() -> usize {
 pub async fn get_connected_clients() -> Vec<serde_json::Value> {
     let clients = CONNECTED_CLIENTS.read().await;
     let mut client_info = Vec::new();
-    
+
     for client in clients.values() {
-        let connected_duration = client.connected_at
-            .elapsed()
-            .unwrap_or_default()
-            .as_secs();
-            
+        let connected_duration = client.connected_at.elapsed().unwrap_or_default().as_secs();
+
         client_info.push(serde_json::json!({
             "id": client.id,
             "connected_at": client.connected_at
@@ -170,27 +176,27 @@ pub async fn get_connected_clients() -> Vec<serde_json::Value> {
             "connected_duration_seconds": connected_duration
         }));
     }
-    
+
     client_info
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_broadcast_no_clients() {
         let snapshot = SystemSnapshot::new();
         let result = broadcast_snapshot(snapshot).await;
         assert!(result.is_ok());
     }
-    
+
     #[tokio::test]
     async fn test_connected_client_count() {
         let count = get_connected_client_count().await;
         assert!(count == 0); // No clients connected in test
     }
-    
+
     #[tokio::test]
     async fn test_connected_clients_info() {
         let clients = get_connected_clients().await;

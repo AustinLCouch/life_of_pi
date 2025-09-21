@@ -1,6 +1,6 @@
 //! HTTP handlers for API endpoints.
 
-use crate::metrics::{SystemCollector, MetricsProvider};
+use crate::metrics::{MetricsProvider, SystemCollector};
 use axum::{
     http::StatusCode,
     response::{Html, Json},
@@ -26,17 +26,15 @@ lazy_static::lazy_static! {
 /// Get current system snapshot as JSON.
 pub async fn get_snapshot() -> Result<Json<serde_json::Value>, StatusCode> {
     let mut collector = COLLECTOR.lock().await;
-    
+
     match collector.collect_snapshot().await {
-        Ok(snapshot) => {
-            match serde_json::to_value(&snapshot) {
-                Ok(json_value) => Ok(Json(json_value)),
-                Err(e) => {
-                    error!("Failed to serialize snapshot: {}", e);
-                    Err(StatusCode::INTERNAL_SERVER_ERROR)
-                }
+        Ok(snapshot) => match serde_json::to_value(&snapshot) {
+            Ok(json_value) => Ok(Json(json_value)),
+            Err(e) => {
+                error!("Failed to serialize snapshot: {}", e);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
             }
-        }
+        },
         Err(e) => {
             error!("Failed to collect snapshot: {}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)

@@ -16,7 +16,7 @@
 //!
 //! ```rust,no_run
 //! use life_of_pi::{SystemCollector, SystemMonitor, start_web_server, WebConfig};
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let mut collector = SystemCollector::new()?;
@@ -39,7 +39,7 @@ pub mod web;
 pub use error::{Result, SystemError};
 pub use metrics::{
     collector::SystemCollector,
-    data::{SystemSnapshot, CpuInfo, MemoryInfo, StorageInfo, NetworkInfo},
+    data::{CpuInfo, MemoryInfo, NetworkInfo, StorageInfo, SystemSnapshot},
     traits::{MetricsProvider, SystemMonitor},
 };
 
