@@ -225,7 +225,6 @@ pub use raspberry_pi::RaspberryPiGpio as DefaultGpioProvider;
 #[cfg(not(all(feature = "gpio", target_os = "linux")))]
 pub use mock::MockGpio as DefaultGpioProvider;
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -13,6 +13,7 @@ A clean, minimalist Rust crate for real-time Raspberry Pi system monitoring with
 - **🌐 Web Dashboard**: Beautiful, responsive web interface with live charts
 - **📊 WebSocket Streaming**: Real-time data updates with minimal latency
 - **🖥️ CLI Tools**: Both library crate and standalone binary
+- **🌏 Auto Browser Opening**: Automatically opens dashboard in default browser (with headless detection)
 - **🏗️ Cross-compilation**: Build on macOS/Linux for Raspberry Pi deployment
 - **⚡ High Performance**: Efficient async implementation with minimal overhead
 - **🛡️ Safe & Idiomatic**: Written in safe Rust with comprehensive error handling
@@ -32,8 +33,13 @@ A clean, minimalist Rust crate for real-time Raspberry Pi system monitoring with
    ```bash
    life_of_pi
    ```
+   
+   The browser will automatically open to the dashboard. If running in a headless environment or if you prefer to open it manually, use:
+   ```bash
+   life_of_pi --no-browser
+   ```
 
-3. **Open your browser** and navigate to `http://your-pi:8080`
+3. **The dashboard** will be available at `http://your-pi:8080`
 
 ### Using as a Library
 
@@ -84,6 +90,9 @@ life_of_pi info
 
 # Enable verbose logging
 life_of_pi --verbose
+
+# Disable automatic browser opening (useful for headless systems)
+life_of_pi --no-browser
 
 # Use external static files
 life_of_pi serve --static-dir ./my-dashboard

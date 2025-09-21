@@ -46,7 +46,9 @@ pub use metrics::{
 #[cfg(feature = "gpio")]
 pub use metrics::gpio::{GpioProvider, GpioStatus};
 
-pub use web::{start_web_server, start_web_server_simple, WebConfig};
+pub use web::{
+    start_web_server, start_web_server_simple, start_web_server_with_options, WebConfig,
+};
 
 /// The default monitoring interval in milliseconds
 pub const DEFAULT_INTERVAL_MS: u64 = 500;

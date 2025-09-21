@@ -4,7 +4,7 @@
 
 use clap::{Args, Parser, Subcommand};
 use life_of_pi::{
-    start_web_server, SystemCollector, SystemMonitor, WebConfig, DEFAULT_INTERVAL_MS,
+    start_web_server_with_options, SystemCollector, SystemMonitor, WebConfig, DEFAULT_INTERVAL_MS,
     DEFAULT_WEB_PORT,
 };
 use tracing::{error, info, Level};
@@ -43,6 +43,10 @@ struct Cli {
     /// Enable debug logging
     #[arg(short, long)]
     debug: bool,
+
+    /// Don't automatically open browser when starting web server
+    #[arg(long)]
+    no_browser: bool,
 }
 
 #[derive(Subcommand)]
@@ -192,7 +196,7 @@ async fn serve_command(cli: &Cli, args: &ServeArgs) -> Result<(), Box<dyn std::e
 
     // Start web server
     info!("Starting web server...");
-    start_web_server(web_config, stream).await?;
+    start_web_server_with_options(web_config, stream, !cli.no_browser).await?;
 
     Ok(())
 }
@@ -421,5 +425,14 @@ mod tests {
         assert_eq!(cli.port, DEFAULT_WEB_PORT);
         assert_eq!(cli.interval, DEFAULT_INTERVAL_MS);
         assert_eq!(cli.host, "0.0.0.0");
+        assert!(!cli.no_browser); // Browser should open by default
+    }
+
+    #[test]
+    fn test_no_browser_flag() {
+        use clap::Parser;
+
+        let cli = Cli::try_parse_from(["life_of_pi", "--no-browser"]).unwrap();
+        assert!(cli.no_browser); // Browser should be disabled
     }
 }

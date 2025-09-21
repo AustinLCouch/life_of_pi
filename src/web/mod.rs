@@ -16,14 +16,24 @@ use crate::error::{Result, SystemError};
 use crate::metrics::SystemSnapshot;
 // Note: axum 0.7+ doesn't have a Server struct, we'll use tokio directly
 use futures_util::stream::BoxStream;
+use std::env;
 use std::net::SocketAddr;
 use tokio_stream::StreamExt;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 /// Start the web server with the provided configuration and metrics stream.
 pub async fn start_web_server(
     config: WebConfig,
+    metrics_stream: BoxStream<'static, SystemSnapshot>,
+) -> Result<()> {
+    start_web_server_with_options(config, metrics_stream, true).await
+}
+
+/// Start the web server with the provided configuration, metrics stream, and browser opening option.
+pub async fn start_web_server_with_options(
+    config: WebConfig,
     mut metrics_stream: BoxStream<'static, SystemSnapshot>,
+    open_browser: bool,
 ) -> Result<()> {
     // Create the axum application
     let app = create_app(config.clone()).await?;
@@ -42,6 +52,11 @@ pub async fn start_web_server(
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .map_err(|e| SystemError::web_server_error(format!("Failed to bind to address: {}", e)))?;
+
+    // Open browser if requested and not in headless environment
+    if open_browser {
+        open_browser_if_appropriate(&addr).await;
+    }
 
     // Start the metrics collection task
     let _metrics_task = tokio::spawn(async move {
@@ -72,4 +87,44 @@ pub async fn start_web_server_simple(
 ) -> Result<()> {
     let config = WebConfig::default().with_port(port);
     start_web_server(config, stream).await
+}
+
+/// Checks if we should open a browser and attempts to do so.
+///
+/// This function detects headless/CI environments and avoids opening browsers in those cases.
+async fn open_browser_if_appropriate(addr: &SocketAddr) {
+    // Check for common CI/headless environment variables
+    let is_ci = env::var("CI").is_ok()
+        || env::var("CONTINUOUS_INTEGRATION").is_ok()
+        || env::var("GITHUB_ACTIONS").is_ok()
+        || env::var("JENKINS_URL").is_ok()
+        || env::var("BUILDKITE").is_ok()
+        || env::var("HEADLESS").is_ok()
+        || env::var("DISPLAY").is_ok_and(|d| d.is_empty());
+
+    if is_ci {
+        info!("Detected headless/CI environment, skipping browser auto-open");
+        return;
+    }
+
+    // Create the URL to open
+    let url = if addr.ip().is_loopback() || addr.ip() == std::net::Ipv4Addr::UNSPECIFIED {
+        // Replace 0.0.0.0 or 127.0.0.1 with localhost for better browser compatibility
+        format!("http://localhost:{}", addr.port())
+    } else {
+        format!("http://{}", addr)
+    };
+
+    info!("Opening browser to {}", url);
+
+    // Use tokio::task::spawn_blocking to avoid blocking the async runtime
+    let url_clone = url.clone();
+    tokio::task::spawn_blocking(move || {
+        if let Err(e) = webbrowser::open(&url_clone) {
+            warn!(
+                "Failed to open browser automatically: {}. You can manually open {}",
+                e, url_clone
+            );
+        }
+    });
 }
