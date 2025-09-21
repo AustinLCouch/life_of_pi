@@ -126,13 +126,10 @@ mod raspberry_pi {
 
                         let state = match pin.mode() {
                             Mode::Input => PinState::Input,
-                            Mode::Output => {
-                                // Use read() method which returns Level::High or Level::Low
-                                match pin.read() {
-                                    rppal::gpio::Level::High => PinState::High,
-                                    rppal::gpio::Level::Low => PinState::Low,
-                                }
-                            }
+                            Mode::Output => match pin.read() {
+                                rppal::gpio::Level::High => PinState::High,
+                                rppal::gpio::Level::Low => PinState::Low,
+                            },
                             _ => PinState::Unknown,
                         };
 
@@ -173,12 +170,10 @@ mod raspberry_pi {
 
             let state = match gpio_pin.mode() {
                 Mode::Input => PinState::Input,
-                Mode::Output => {
-                    match gpio_pin.read() {
-                        rppal::gpio::Level::High => PinState::High,
-                        rppal::gpio::Level::Low => PinState::Low,
-                    }
-                }
+                Mode::Output => match gpio_pin.read() {
+                    rppal::gpio::Level::High => PinState::High,
+                    rppal::gpio::Level::Low => PinState::Low,
+                },
                 _ => PinState::Unknown,
             };
 
