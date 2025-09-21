@@ -10,7 +10,7 @@ homepage = "https://github.com/austincouch/life_of_pi"
 repository = "https://github.com/austincouch/life_of_pi"
 keywords = ["raspberry-pi", "system-monitoring", "diagnostics", "embedded"]
 categories = ["embedded", "web-programming", "development-tools"]
-rust-version = "1.70"
+rust-version = "1.75"
 
 [[bin]]
 name = "life_of_pi"
