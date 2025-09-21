@@ -312,11 +312,10 @@ fn test_gpio_functionality() {
 
     // This test will only run when GPIO feature is enabled
     // Behavior depends on whether running on actual Raspberry Pi or mock
-    assert!(
-        status.available_pins.len() >= 0,
-        "Should have valid pin count"
-    );
-    assert!(status.pin_states.len() >= 0, "Should have valid pin states");
+    // Just verify that we can read the status without panicking
+    // The exact values depend on the platform (real Pi vs mock)
+    let _pin_count = status.available_pins.len();
+    let _state_count = status.pin_states.len();
 }
 
 /// Test JSON schema validation for SystemSnapshot

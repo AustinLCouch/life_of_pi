@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// GPIO pin status and configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GpioStatus {
     /// Available GPIO pins on the system
     pub available_pins: Vec<u8>,
@@ -225,16 +225,6 @@ pub use raspberry_pi::RaspberryPiGpio as DefaultGpioProvider;
 #[cfg(not(all(feature = "gpio", target_os = "linux")))]
 pub use mock::MockGpio as DefaultGpioProvider;
 
-impl Default for GpioStatus {
-    fn default() -> Self {
-        Self {
-            available_pins: Vec::new(),
-            pin_states: HashMap::new(),
-            pin_functions: HashMap::new(),
-            gpio_available: false,
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
