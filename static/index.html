@@ -242,6 +242,23 @@
             word-break: break-word;
             min-height: 1.3em;
         }
+        
+        /* Non-Pi system indicators */
+        .non-pi-system .info-value {
+            color: #ff8c00;
+            font-style: italic;
+        }
+        
+        .header.non-pi-system {
+            background: linear-gradient(135deg, #ff9a56 0%, #ff6b35 100%);
+        }
+        
+        .header.non-pi-system h1::after {
+            content: " (Development Mode)";
+            font-size: 0.6em;
+            opacity: 0.8;
+            font-weight: normal;
+        }
 
         @media (max-width: 768px) {
             .charts-container {
@@ -277,9 +294,9 @@
 </head>
 <body>
     <div class="container">
-        <header class="header">
+        <header class="header" id="system-header">
             <h1>🥧 Life of Pi</h1>
-            <p>Real-time Raspberry Pi System Monitor <span class="status-indicator status-online" id="status-indicator"></span></p>
+            <p id="header-subtitle">Real-time Raspberry Pi System Monitor <span class="status-indicator status-online" id="status-indicator"></span></p>
         </header>
 
         <!-- System Information Section -->
@@ -542,12 +559,21 @@
             // Operating System
             document.getElementById('os-info').textContent = data.os_name;
             
-            // Pi Model
+            // Pi Model and System Type
             const piModelElement = document.getElementById('pi-model');
-            if (data.pi_model) {
+            if (data.is_raspberry_pi && data.pi_model) {
                 piModelElement.textContent = data.pi_model;
+                piModelElement.classList.remove('non-pi-system');
             } else {
                 piModelElement.textContent = 'Not a Raspberry Pi';
+                piModelElement.classList.add('non-pi-system');
+                // Mark header to show this is not a Pi system
+                const header = document.getElementById('system-header');
+                const subtitle = document.getElementById('header-subtitle');
+                header.classList.add('non-pi-system');
+                // Update subtitle for non-Pi systems
+                const statusIndicator = subtitle.querySelector('.status-indicator');
+                subtitle.innerHTML = `Real-time System Monitor (Non-Pi Development Mode) ${statusIndicator.outerHTML}`;
             }
             
             // Uptime

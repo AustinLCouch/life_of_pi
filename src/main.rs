@@ -42,6 +42,7 @@ struct SystemSnapshot {
     current_user: String,
     local_ips: Vec<String>,
     pi_model: Option<String>,
+    is_raspberry_pi: bool,
 }
 
 #[derive(Clone)]
@@ -151,6 +152,7 @@ fn get_system_snapshot() -> SystemSnapshot {
     let current_user = env::var("USER").unwrap_or_else(|_| "unknown".to_string());
     let local_ips = get_local_ip_addresses();
     let pi_model = get_pi_model();
+    let is_raspberry_pi = pi_model.is_some();
 
     SystemSnapshot {
         timestamp: SystemTime::now()
@@ -177,6 +179,7 @@ fn get_system_snapshot() -> SystemSnapshot {
         current_user,
         local_ips,
         pi_model,
+        is_raspberry_pi,
     }
 }
 
