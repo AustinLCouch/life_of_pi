@@ -1,438 +1,185 @@
-//! Life of Pi - Raspberry Pi System Diagnostics Binary
-//!
-//! A standalone binary for real-time Raspberry Pi system monitoring with web interface.
-
-use clap::{Args, Parser, Subcommand};
-use life_of_pi::{
-    start_web_server_with_options, SystemCollector, SystemMonitor, WebConfig, DEFAULT_INTERVAL_MS,
-    DEFAULT_WEB_PORT,
+use axum::{
+    extract::State,
+    response::{Html, Json},
+    routing::{get, Router},
+    serve,
 };
-use tracing::{error, info, Level};
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use serde::{Deserialize, Serialize};
+use std::{
+    fs,
+    net::SocketAddr,
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+use sysinfo::{Disks, Networks, System};
+use tokio::{net::TcpListener, time::interval};
+use tower_http::{cors::CorsLayer, services::ServeDir};
+use tracing::info;
 
-#[derive(Parser)]
-#[command(name = "life_of_pi")]
-#[command(about = "🥧 Life of Pi - Raspberry Pi System Diagnostics")]
-#[command(version = env!("CARGO_PKG_VERSION"))]
-#[command(author = "Austin Couch")]
-#[command(long_about = "A real-time system monitoring tool for Raspberry Pi with web interface")]
-struct Cli {
-    #[command(subcommand)]
-    command: Option<Commands>,
-
-    /// Web server bind address
-    #[arg(long, default_value = "0.0.0.0")]
-    host: String,
-
-    /// Web server port
-    #[arg(short, long, default_value_t = DEFAULT_WEB_PORT)]
-    port: u16,
-
-    /// System metrics collection interval in milliseconds
-    #[arg(short, long, default_value_t = DEFAULT_INTERVAL_MS)]
-    interval: u64,
-
-    /// Disable GPIO monitoring (useful for non-Pi systems)
-    #[arg(long)]
-    no_gpio: bool,
-
-    /// Enable verbose logging
-    #[arg(short, long)]
-    verbose: bool,
-
-    /// Enable debug logging
-    #[arg(short, long)]
-    debug: bool,
-
-    /// Don't automatically open browser when starting web server
-    #[arg(long)]
-    no_browser: bool,
+// System metrics snapshot
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SystemSnapshot {
+    timestamp: u64,
+    cpu_usage: f32,
+    cpu_temp: f32,
+    memory_total: u64,
+    memory_used: u64,
+    memory_percent: f32,
+    disk_total: u64,
+    disk_used: u64,
+    disk_percent: f32,
+    network_rx: u64,
+    network_tx: u64,
 }
 
-#[derive(Subcommand)]
-enum Commands {
-    /// Start the web server (default)
-    Serve(ServeArgs),
-
-    /// Get a single system snapshot and exit
-    Snapshot(SnapshotArgs),
-
-    /// Show system information
-    Info,
-}
-
-#[derive(Args)]
-struct ServeArgs {
-    /// Static files directory (optional)
-    #[arg(long)]
-    static_dir: Option<String>,
-
-    /// Disable CORS headers
-    #[arg(long)]
-    no_cors: bool,
-
-    /// Maximum WebSocket connections
-    #[arg(long, default_value_t = 100)]
-    max_connections: usize,
-}
-
-#[derive(Args)]
-struct SnapshotArgs {
-    /// Output format: json, yaml, or pretty
-    #[arg(short, long, default_value = "pretty")]
-    format: String,
-
-    /// Include GPIO information (if available)
-    #[cfg(feature = "gpio")]
-    #[arg(long)]
-    include_gpio: bool,
+#[derive(Clone)]
+struct AppState {
+    latest_snapshot: Arc<tokio::sync::RwLock<SystemSnapshot>>,
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = Cli::parse();
+async fn main() -> anyhow::Result<()> {
+    // Initialize logging
+    tracing_subscriber::fmt::init();
 
-    // Initialize tracing/logging
-    init_logging(&cli)?;
+    info!("🥧 Life of Pi - Starting Raspberry Pi Monitor");
 
-    // Print banner
-    print_banner();
-
-    match &cli.command {
-        Some(Commands::Serve(args)) => {
-            serve_command(&cli, args).await?;
-        }
-        Some(Commands::Snapshot(args)) => {
-            snapshot_command(&cli, args).await?;
-        }
-        Some(Commands::Info) => {
-            info_command().await?;
-        }
-        None => {
-            // Default to serve command
-            let serve_args = ServeArgs {
-                static_dir: None,
-                no_cors: false,
-                max_connections: 100,
-            };
-            serve_command(&cli, &serve_args).await?;
-        }
-    }
-
-    Ok(())
-}
-
-fn init_logging(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
-    let level = if cli.debug {
-        Level::DEBUG
-    } else if cli.verbose {
-        Level::INFO
-    } else {
-        Level::WARN
+    // Create initial state
+    let app_state = AppState {
+        latest_snapshot: Arc::new(tokio::sync::RwLock::new(get_system_snapshot())),
     };
 
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(level)
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_target(false)
-        .compact()
-        .finish();
+    // Start background metrics collection
+    let state_clone = app_state.clone();
+    tokio::spawn(async move {
+        let mut interval = interval(Duration::from_secs(2));
+        loop {
+            interval.tick().await;
+            let snapshot = get_system_snapshot();
+            *state_clone.latest_snapshot.write().await = snapshot;
+        }
+    });
 
-    tracing::subscriber::set_global_default(subscriber)?;
+    // Create router
+    let app = Router::new()
+        .route("/", get(dashboard))
+        .route("/api/metrics", get(get_metrics))
+        .nest_service("/static", ServeDir::new("static"))
+        .layer(CorsLayer::permissive())
+        .with_state(app_state);
+
+    // Start server
+    let port = std::env::var("PORT")
+        .unwrap_or_else(|_| "8080".to_string())
+        .parse::<u16>()?;
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+
+    info!("Starting server on http://{}", addr);
+    info!("Dashboard: http://localhost:{}", port);
+    info!("API: http://localhost:{}/api/metrics", port);
+
+    let listener = TcpListener::bind(addr).await?;
+    serve(listener, app).await?;
 
     Ok(())
 }
 
-fn print_banner() {
-    println!("🥧 Life of Pi - Raspberry Pi System Diagnostics");
-    println!("   Version: {}", env!("CARGO_PKG_VERSION"));
-    println!("   Built for real-time Pi monitoring");
-    println!();
-}
+// Get current system metrics
+fn get_system_snapshot() -> SystemSnapshot {
+    let mut sys = System::new_all();
+    sys.refresh_all();
 
-async fn serve_command(cli: &Cli, args: &ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Starting Life of Pi system monitor...");
+    // CPU usage (global usage)
+    let cpu_usage = sys.global_cpu_usage();
 
-    // Create system collector
-    let mut collector = SystemCollector::new()?;
-    info!("System collector initialized");
-
-    // Start metrics collection stream
-    let stream = collector
-        .start_collecting_with_interval(cli.interval)
-        .await?;
-    info!(
-        "Started metrics collection with {}ms interval",
-        cli.interval
-    );
-
-    // Configure web server
-    let mut web_config = WebConfig::new(&cli.host, cli.port);
-
-    if let Some(static_dir) = &args.static_dir {
-        web_config = web_config.with_static_path(Some(static_dir.clone()));
-        info!("Using static files from: {}", static_dir);
-    }
-
-    web_config = web_config
-        .with_cors(!args.no_cors)
-        .with_max_websocket_connections(args.max_connections);
-
-    if cli.no_gpio {
-        info!("GPIO monitoring disabled");
+    // Memory
+    let memory_total = sys.total_memory();
+    let memory_used = sys.used_memory();
+    let memory_percent = if memory_total > 0 {
+        (memory_used as f32 / memory_total as f32) * 100.0
     } else {
-        #[cfg(feature = "gpio")]
-        info!("GPIO monitoring enabled");
+        0.0
+    };
 
-        #[cfg(not(feature = "gpio"))]
-        info!("GPIO monitoring not available (feature not compiled)");
-    }
-
-    info!("Web server configuration:");
-    info!("  - Bind address: {}:{}", cli.host, cli.port);
-    info!("  - CORS enabled: {}", !args.no_cors);
-    info!("  - Max WebSocket connections: {}", args.max_connections);
-    info!("  - Metrics interval: {}ms", cli.interval);
-
-    // Start web server
-    info!("Starting web server...");
-    start_web_server_with_options(web_config, stream, !cli.no_browser).await?;
-
-    Ok(())
-}
-
-async fn snapshot_command(
-    _cli: &Cli,
-    args: &SnapshotArgs,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut collector = SystemCollector::new()?;
-    let snapshot = collector.get_snapshot().await?;
-
-    match args.format.as_str() {
-        "json" => {
-            let json = serde_json::to_string_pretty(&snapshot)?;
-            println!("{}", json);
-        }
-        "pretty" => {
-            print_pretty_snapshot(&snapshot);
-        }
-        _ => {
-            error!(
-                "Unsupported format: {}. Use 'json' or 'pretty'",
-                args.format
-            );
-            std::process::exit(1);
+    // Disk (use root filesystem)
+    let mut disk_total = 0;
+    let mut disk_used = 0;
+    let disks = Disks::new_with_refreshed_list();
+    for disk in &disks {
+        if disk.mount_point().to_str().unwrap_or("") == "/" {
+            disk_total = disk.total_space();
+            disk_used = disk_total - disk.available_space();
+            break;
         }
     }
+    let disk_percent = if disk_total > 0 {
+        (disk_used as f32 / disk_total as f32) * 100.0
+    } else {
+        0.0
+    };
 
-    Ok(())
-}
-
-async fn info_command() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🥧 Life of Pi System Information");
-    println!("================================");
-    println!();
-
-    let mut collector = SystemCollector::new()?;
-    let snapshot = collector.get_snapshot().await?;
-
-    println!("System Details:");
-    println!("  Hostname: {}", snapshot.system.hostname);
-    println!(
-        "  OS: {} {}",
-        snapshot.system.os_name, snapshot.system.os_version
-    );
-    println!("  Kernel: {}", snapshot.system.kernel_version);
-    println!("  Uptime: {} seconds", snapshot.system.uptime_seconds);
-    println!();
-
-    println!("Hardware:");
-    println!(
-        "  CPU: {} ({} cores)",
-        snapshot.cpu.model, snapshot.cpu.cores
-    );
-    println!("  Architecture: {}", snapshot.cpu.architecture);
-    println!(
-        "  Memory: {:.1} GB total",
-        snapshot.memory.total_bytes as f64 / 1024.0 / 1024.0 / 1024.0
-    );
-
-    if let Some(temp) = snapshot.temperature.cpu_celsius {
-        println!("  CPU Temperature: {:.1}°C", temp);
+    // Network (sum all interfaces)
+    let mut network_rx = 0;
+    let mut network_tx = 0;
+    let networks = Networks::new_with_refreshed_list();
+    for (_name, network) in &networks {
+        network_rx += network.total_received();
+        network_tx += network.total_transmitted();
     }
 
-    println!();
+    // CPU temperature (Raspberry Pi specific)
+    let cpu_temp = read_cpu_temperature().unwrap_or(0.0);
 
-    println!("Storage:");
-    for storage in &snapshot.storage {
-        println!(
-            "  {}: {:.1} GB total, {:.1}% used",
-            storage.mount_point,
-            storage.total_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
-            storage.usage_percent
-        );
-    }
-
-    println!();
-
-    println!("Network Interfaces:");
-    for iface in &snapshot.network {
-        println!(
-            "  {}: {}",
-            iface.interface,
-            if iface.is_up { "UP" } else { "DOWN" }
-        );
-    }
-
-    #[cfg(feature = "gpio")]
-    {
-        println!();
-        println!("GPIO:");
-        if snapshot.gpio.gpio_available {
-            println!("  Available pins: {}", snapshot.gpio.available_pins.len());
-            println!("  GPIO support: enabled");
-        } else {
-            println!("  GPIO support: not available");
-        }
-    }
-
-    println!();
-    println!("Features compiled:");
-    #[cfg(feature = "gpio")]
-    println!("  - GPIO support: ✓");
-    #[cfg(not(feature = "gpio"))]
-    println!("  - GPIO support: ✗");
-
-    Ok(())
-}
-
-fn print_pretty_snapshot(snapshot: &life_of_pi::SystemSnapshot) {
-    println!(
-        "🥧 System Snapshot ({})",
-        chrono::DateTime::from_timestamp_millis(snapshot.timestamp as i64)
+    SystemSnapshot {
+        timestamp: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
-            .format("%Y-%m-%d %H:%M:%S UTC")
-    );
-    println!("==========================================");
-    println!();
-
-    // CPU info
-    println!("⚡ CPU:");
-    println!("  Model: {}", snapshot.cpu.model);
-    println!("  Cores: {}", snapshot.cpu.cores);
-    println!("  Usage: {:.1}%", snapshot.cpu.usage_percent);
-    println!("  Frequency: {} MHz", snapshot.cpu.frequency_mhz);
-    if let Some(governor) = &snapshot.cpu.governor {
-        println!("  Governor: {}", governor);
+            .as_millis() as u64,
+        cpu_usage,
+        cpu_temp,
+        memory_total,
+        memory_used,
+        memory_percent,
+        disk_total,
+        disk_used,
+        disk_percent,
+        network_rx,
+        network_tx,
     }
-    println!(
-        "  Load: {:.2}, {:.2}, {:.2}",
-        snapshot.cpu.load_average.one_minute,
-        snapshot.cpu.load_average.five_minutes,
-        snapshot.cpu.load_average.fifteen_minutes
-    );
-    println!();
-
-    // Memory info
-    println!("🧠 Memory:");
-    println!(
-        "  Total: {:.1} GB",
-        snapshot.memory.total_bytes as f64 / 1024.0 / 1024.0 / 1024.0
-    );
-    println!(
-        "  Available: {:.1} GB",
-        snapshot.memory.available_bytes as f64 / 1024.0 / 1024.0 / 1024.0
-    );
-    println!("  Usage: {:.1}%", snapshot.memory.usage_percent);
-    println!(
-        "  Swap: {:.1} GB used",
-        snapshot.memory.swap.used_bytes as f64 / 1024.0 / 1024.0 / 1024.0
-    );
-    println!();
-
-    // Temperature info
-    println!("🌡️  Temperature:");
-    if let Some(cpu_temp) = snapshot.temperature.cpu_celsius {
-        println!("  CPU: {:.1}°C", cpu_temp);
-    }
-    if let Some(gpu_temp) = snapshot.temperature.gpu_celsius {
-        println!("  GPU: {:.1}°C", gpu_temp);
-    }
-    if snapshot.temperature.is_throttling {
-        println!("  Status: 🔥 THROTTLING");
-    } else {
-        println!("  Status: ✅ Normal");
-    }
-    println!();
-
-    // Storage info
-    if !snapshot.storage.is_empty() {
-        println!("💾 Storage:");
-        for storage in &snapshot.storage {
-            println!(
-                "  {}: {:.1} GB total, {:.1}% used",
-                storage.mount_point,
-                storage.total_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
-                storage.usage_percent
-            );
-        }
-        println!();
-    }
-
-    // Network info
-    if !snapshot.network.is_empty() {
-        println!("🌐 Network:");
-        for iface in &snapshot.network {
-            println!(
-                "  {}: {} (TX: {:.1} MB, RX: {:.1} MB)",
-                iface.interface,
-                if iface.is_up { "UP" } else { "DOWN" },
-                iface.tx_bytes as f64 / 1024.0 / 1024.0,
-                iface.rx_bytes as f64 / 1024.0 / 1024.0
-            );
-        }
-        println!();
-    }
-
-    // System info
-    println!("🖥️  System:");
-    println!("  Hostname: {}", snapshot.system.hostname);
-    println!(
-        "  OS: {} {}",
-        snapshot.system.os_name, snapshot.system.os_version
-    );
-    println!("  Uptime: {} seconds", snapshot.system.uptime_seconds);
-    println!("  Processes: {}", snapshot.system.process_count);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_cli_parsing() {
-        use clap::Parser;
-
-        let cli = Cli::try_parse_from(["life_of_pi", "--port", "9090"]).unwrap();
-        assert_eq!(cli.port, 9090);
+// Read CPU temperature from Raspberry Pi thermal zone
+fn read_cpu_temperature() -> Result<f32, std::io::Error> {
+    // Try Raspberry Pi thermal zone first
+    if let Ok(temp_str) = fs::read_to_string("/sys/class/thermal/thermal_zone0/temp") {
+        if let Ok(temp_millidegrees) = temp_str.trim().parse::<i32>() {
+            return Ok(temp_millidegrees as f32 / 1000.0);
+        }
     }
 
-    #[test]
-    fn test_default_values() {
-        use clap::Parser;
-
-        let cli = Cli::try_parse_from(["life_of_pi"]).unwrap();
-        assert_eq!(cli.port, DEFAULT_WEB_PORT);
-        assert_eq!(cli.interval, DEFAULT_INTERVAL_MS);
-        assert_eq!(cli.host, "0.0.0.0");
-        assert!(!cli.no_browser); // Browser should open by default
+    // Fallback: try common thermal zone files
+    for i in 0..5 {
+        let path = format!("/sys/class/thermal/thermal_zone{}/temp", i);
+        if let Ok(temp_str) = fs::read_to_string(&path) {
+            if let Ok(temp_millidegrees) = temp_str.trim().parse::<i32>() {
+                return Ok(temp_millidegrees as f32 / 1000.0);
+            }
+        }
     }
 
-    #[test]
-    fn test_no_browser_flag() {
-        use clap::Parser;
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "No thermal zone found",
+    ))
+}
 
-        let cli = Cli::try_parse_from(["life_of_pi", "--no-browser"]).unwrap();
-        assert!(cli.no_browser); // Browser should be disabled
-    }
+// API endpoint for metrics
+async fn get_metrics(State(state): State<AppState>) -> Json<SystemSnapshot> {
+    let snapshot = state.latest_snapshot.read().await.clone();
+    Json(snapshot)
+}
+
+// Dashboard HTML
+async fn dashboard() -> Html<&'static str> {
+    Html(include_str!("../static/index.html"))
 }

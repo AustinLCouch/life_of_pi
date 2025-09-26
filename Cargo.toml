@@ -3,77 +3,43 @@ name = "life_of_pi"
 version = "0.1.0"
 edition = "2021"
 authors = ["Austin Couch"]
-description = "Real-time Raspberry Pi 5 system diagnostics with web interface"
+description = "Real-time Raspberry Pi system monitoring with web interface"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-homepage = "https://github.com/austincouch/life_of_pi"
-repository = "https://github.com/austincouch/life_of_pi"
-keywords = ["raspberry-pi", "system-monitoring", "diagnostics", "embedded"]
-categories = ["embedded", "web-programming", "development-tools"]
+keywords = ["raspberry-pi", "system-monitoring", "embedded"]
+categories = ["embedded", "web-programming"]
 rust-version = "1.75"
 
-[[bin]]
-name = "life_of_pi"
-path = "src/main.rs"
-
-[lib]
-name = "life_of_pi"
-path = "src/lib.rs"
-
 [dependencies]
-# Core async runtime
-tokio = { version = "1.0", features = ["full"] }
+# Async runtime
+tokio = { version = "1.40", features = ["full"] }
+
+# Web framework
+axum = "0.7.5"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "cors"] }
 
 # System information
 sysinfo = "0.31"
-
-# Web framework and WebSocket support
-axum = { version = "0.7", features = ["ws"] }
-tower = "0.4"
-tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# CLI parsing
-clap = { version = "4.0", features = ["derive"] }
-
-# Logging and tracing
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
 # Error handling
-thiserror = "1.0"
 anyhow = "1.0"
+thiserror = "1.0"
 
-# Time utilities
-tokio-stream = "0.1"
-futures-util = "0.3"
-async-trait = "0.1"
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
 
-# Browser opening
-webbrowser = "1.0"
-
-# Additional dependencies for web handlers
-lazy_static = "1.4"
+# Time
 chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.0", features = ["v4"] }
 
-# Platform-specific dependencies
-[target.'cfg(target_os = "linux")'.dependencies]
-rppal = { version = "0.22", optional = true }
-
-[features]
-default = []
-gpio = ["rppal"]
-
-# Development dependencies
-[dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
-futures-util = "0.3"
-tokio-test = "0.4"
-
-[[bench]]
-name = "system_benchmarks"
-harness = false
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

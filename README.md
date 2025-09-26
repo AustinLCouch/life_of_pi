@@ -1,261 +1,85 @@
-# 🥧 Life of Pi - Raspberry Pi System Diagnostics
+# 🥧 Life of Pi - Raspberry Pi Monitor
 
-[![Rust](https://github.com/austincouch/life_of_pi/workflows/CI/badge.svg)](https://github.com/austincouch/life_of_pi/actions)
-[![Crates.io](https://img.shields.io/crates/v/life_of_pi)](https://crates.io/crates/life_of_pi)
-[![Documentation](https://docs.rs/life_of_pi/badge.svg)](https://docs.rs/life_of_pi)
-
-A clean, minimalist Rust crate for real-time Raspberry Pi system monitoring with a beautiful web interface. Designed specifically for plug-and-play operation on Raspberry Pi 5 running RaspberryOS x64.
+A clean, minimal Rust application for real-time Raspberry Pi system monitoring with a beautiful web dashboard.
 
 ## ✨ Features
 
-- **🔄 Real-time System Monitoring**: CPU usage, temperature, memory, storage, network metrics
-- **🔌 GPIO Status Monitoring**: Pin states and availability (feature-gated for cross-compilation)
-- **🌐 Web Dashboard**: Beautiful, responsive web interface with live charts
-- **📊 WebSocket Streaming**: Real-time data updates with minimal latency
-- **🖥️ CLI Tools**: Both library crate and standalone binary
-- **🌏 Auto Browser Opening**: Automatically opens dashboard in default browser (with headless detection)
-- **🏗️ Cross-compilation**: Build on macOS/Linux for Raspberry Pi deployment
+- **🔄 Real-time System Monitoring**: CPU usage, temperature, memory, disk, network
+- **🌐 Beautiful Web Dashboard**: Responsive interface with live charts
 - **⚡ High Performance**: Efficient async implementation with minimal overhead
-- **🛡️ Safe & Idiomatic**: Written in safe Rust with comprehensive error handling
+- **🏗️ Cross-compilation**: Build on macOS/Linux for Raspberry Pi deployment
+- **🛡️ Safe & Clean**: Simple, focused codebase following Rust best practices
 
 ## 🚀 Quick Start
 
-### Using the Binary
-
-1. **Download the latest release** for Raspberry Pi (aarch64):
-   ```bash
-   wget https://github.com/austincouch/life_of_pi/releases/latest/download/life_of_pi-aarch64
-   chmod +x life_of_pi-aarch64
-   sudo mv life_of_pi-aarch64 /usr/local/bin/life_of_pi
-   ```
-
-2. **Run the monitor**:
-   ```bash
-   life_of_pi
-   ```
-   
-   The browser will automatically open to the dashboard. If running in a headless environment or if you prefer to open it manually, use:
-   ```bash
-   life_of_pi --no-browser
-   ```
-
-3. **The dashboard** will be available at `http://your-pi:8080`
-
-### Using as a Library
-
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-life_of_pi = "0.1"
-```
-
-Basic usage:
-
-```rust
-use life_of_pi::{SystemCollector, SystemMonitor, WebConfig, start_web_server};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create a system collector
-    let mut collector = SystemCollector::new()?;
-    
-    // Get a single snapshot
-    let snapshot = collector.get_snapshot().await?;
-    println!("CPU Usage: {:.1}%", snapshot.cpu.usage_percent);
-    
-    // Start real-time monitoring with web server
-    let stream = collector.start_collecting().await?;
-    let config = WebConfig::default().with_port(8080);
-    start_web_server(config, stream).await?;
-    
-    Ok(())
-}
-```
-
-## 🖥️ Command Line Interface
+### 1. Cross-compile for Raspberry Pi
 
 ```bash
-# Start web server on custom port
-life_of_pi --port 9090
+# Install cross-compilation target (you already have this!)
+rustup target add aarch64-unknown-linux-gnu
 
-# Start with custom metrics interval
-life_of_pi --interval 1000
-
-# Get a single system snapshot as JSON
-life_of_pi snapshot --format json
-
-# Show detailed system information
-life_of_pi info
-
-# Enable verbose logging
-life_of_pi --verbose
-
-# Disable automatic browser opening (useful for headless systems)
-life_of_pi --no-browser
-
-# Use external static files
-life_of_pi serve --static-dir ./my-dashboard
+# Build for Raspberry Pi
+make pi
+# or manually: cargo build --release --target aarch64-unknown-linux-gnu
 ```
 
-## 🏗️ Cross-compilation for Raspberry Pi
-
-### Prerequisites
-
-Install `cross`:
-```bash
-cargo install cross
-```
-
-### Build for Raspberry Pi 5 (aarch64)
+### 2. Deploy to your Raspberry Pi
 
 ```bash
-# Build with GPIO support for Raspberry Pi
-cross build --target aarch64-unknown-linux-gnu --release --features gpio
-
-# The binary will be in target/aarch64-unknown-linux-gnu/release/life_of_pi
+# Copy binary to your Pi (update the IP address)
+scp target/aarch64-unknown-linux-gnu/release/life_of_pi pi@YOUR_PI_IP:/home/pi/
 ```
 
-### Transfer to Raspberry Pi
+### 3. Run on Raspberry Pi
 
 ```bash
-scp target/aarch64-unknown-linux-gnu/release/life_of_pi pi@your-pi-ip:/home/pi/
+# SSH into your Pi and run
+ssh pi@YOUR_PI_IP
+./life_of_pi
 ```
 
-## 📊 Web Dashboard
+### 4. View the dashboard
 
-The web interface provides real-time monitoring with:
+Open your browser to `http://YOUR_PI_IP:8080` to see the beautiful monitoring dashboard!
 
-- **📈 Live CPU Usage** - Per-core and aggregate statistics
-- **🌡️ Temperature Monitoring** - CPU/GPU temps with throttling alerts
-- **🧠 Memory Usage** - RAM and swap utilization
-- **💾 Storage Info** - Disk usage across all mounted filesystems
-- **🌐 Network Status** - Interface status and traffic statistics
-- **🔌 GPIO Status** - Pin states and configurations (when enabled)
-- **⚡ System Health** - Uptime, load averages, and process count
+## 🖥️ Development
 
-## 🔧 Configuration
+```bash
+# Run locally for development (will show mock data on non-Pi systems)
+cargo run --target aarch64-apple-darwin
+# or: make run
 
-### Features
+# Check code quality
+make check
 
-- `gpio` (optional) - Enable GPIO monitoring with `rppal`
-- Default: No features enabled for cross-compilation compatibility
+# Format code
+make fmt
+```
 
-### Environment Variables
+## 📊 What it monitors
 
-- `RUST_LOG` - Configure logging level (`debug`, `info`, `warn`, `error`)
-- `LIFE_OF_PI_PORT` - Default web server port
+- **CPU Usage**: Real-time percentage with history charts
+- **CPU Temperature**: Direct from thermal sensors (Pi-specific)
+- **Memory Usage**: RAM utilization with detailed breakdown
+- **Disk Usage**: Root filesystem usage
+- **Network Traffic**: Total RX/TX across all interfaces
 
-## 🏛️ Architecture
-
-Life of Pi follows a clean MVC architecture:
+## 🏛️ Simple Architecture
 
 ```
 src/
-├── lib.rs              # Public API and re-exports
-├── main.rs             # CLI binary
-├── error.rs            # Unified error handling
-├── metrics/            # Model - System data collection
-│   ├── collector.rs    # Core metrics collector
-│   ├── data.rs         # Data structures
-│   ├── gpio.rs         # GPIO support (feature-gated)
-│   └── traits.rs       # Monitoring traits
-└── web/                # Controller - Web server
-    ├── config.rs       # Web server configuration
-    ├── handlers.rs     # HTTP request handlers
-    ├── router.rs       # Route definitions
-    └── websocket.rs    # WebSocket streaming
+└── main.rs              # Single-file application, ~200 lines
+static/
+└── index.html           # Beautiful web dashboard
+Makefile                 # Build & deployment helpers
 ```
 
-## 📋 System Requirements
+## 📋 Requirements
 
-### Raspberry Pi
-- **Raspberry Pi 5** (recommended) or Pi 4
-- **RaspberryOS 64-bit** (Bookworm recommended)
-- **1GB RAM** minimum
-- **Network connectivity** for web access
-
-### Development
-- **Rust 1.70+** (MSRV)
-- **tokio** async runtime
-- For cross-compilation: `cross` and Docker
-
-## 🧪 Testing & Benchmarking
-
-### Unit and Integration Tests
-```bash
-# Run unit tests
-cargo test --lib
-
-# Run integration tests with memory leak detection
-cargo test --test integration_tests
-
-# Run all tests
-cargo test
-
-# Run tests with all features
-cargo test --features gpio
-```
-
-### Performance Benchmarks
-```bash
-# Run comprehensive performance benchmarks
-cargo bench --bench system_benchmarks
-
-# Quick benchmark with smaller sample size
-cargo bench --bench system_benchmarks -- --sample-size 10
-
-# Benchmark specific functions
-cargo bench --bench system_benchmarks -- json_serialization
-```
-
-### Code Quality
-```bash
-# Format code
-cargo fmt
-
-# Run clippy for linting
-cargo clippy --all-targets --all-features -- -D warnings
-
-# Security audit
-cargo audit
-
-# Check licenses and dependencies
-cargo deny check
-```
-
-### CI/CD Pipeline
-The project includes a comprehensive GitHub Actions CI pipeline that:
-- Tests on multiple Rust versions (stable, beta, nightly)
-- Cross-compiles for Raspberry Pi targets
-- Runs security audits and license checks
-- Generates code coverage reports
-- Performs performance benchmarks
-- Builds release artifacts
+- **Rust 1.75+**
+- **Raspberry Pi 4/5** with network access
+- **Cross-compilation tools** (handled automatically)
 
 ## 📝 License
 
-This project is licensed under either of
-
-- Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
-
-at your option.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## ⚠️ Note on GPIO Support
-
-GPIO functionality is feature-gated to allow compilation on non-Raspberry Pi systems. When running on macOS or Linux without the `gpio` feature, GPIO monitoring will be disabled but all other functionality remains available.
-
----
-
-Made with ❤️ for the Raspberry Pi community
+MIT OR Apache-2.0
