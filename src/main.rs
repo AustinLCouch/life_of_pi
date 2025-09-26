@@ -6,8 +6,9 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    fs,
+    env, fs,
     net::SocketAddr,
+    process::Command,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -30,6 +31,17 @@ struct SystemSnapshot {
     disk_percent: f32,
     network_rx: u64,
     network_tx: u64,
+    // System information
+    hostname: String,
+    os_name: String,
+    kernel_version: String,
+    uptime: u64, // seconds
+    load_avg_1m: f64,
+    load_avg_5m: f64,
+    load_avg_15m: f64,
+    current_user: String,
+    local_ips: Vec<String>,
+    pi_model: Option<String>,
 }
 
 #[derive(Clone)]
@@ -130,6 +142,16 @@ fn get_system_snapshot() -> SystemSnapshot {
     // CPU temperature (Raspberry Pi specific)
     let cpu_temp = read_cpu_temperature().unwrap_or(0.0);
 
+    // System information
+    let hostname = System::host_name().unwrap_or_else(|| "unknown".to_string());
+    let os_name = System::long_os_version().unwrap_or_else(|| "Unknown OS".to_string());
+    let kernel_version = System::kernel_version().unwrap_or_else(|| "Unknown".to_string());
+    let uptime = System::uptime();
+    let load_avg = System::load_average();
+    let current_user = env::var("USER").unwrap_or_else(|_| "unknown".to_string());
+    let local_ips = get_local_ip_addresses();
+    let pi_model = get_pi_model();
+
     SystemSnapshot {
         timestamp: SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -145,31 +167,160 @@ fn get_system_snapshot() -> SystemSnapshot {
         disk_percent,
         network_rx,
         network_tx,
+        hostname,
+        os_name,
+        kernel_version,
+        uptime,
+        load_avg_1m: load_avg.one,
+        load_avg_5m: load_avg.five,
+        load_avg_15m: load_avg.fifteen,
+        current_user,
+        local_ips,
+        pi_model,
     }
+}
+
+// Get local IP addresses
+fn get_local_ip_addresses() -> Vec<String> {
+    use std::net::IpAddr;
+
+    let mut ips = Vec::new();
+
+    if let Ok(output) = Command::new("hostname").arg("-I").output() {
+        if output.status.success() {
+            let ip_string = String::from_utf8_lossy(&output.stdout);
+            for ip in ip_string.split_whitespace() {
+                if let Ok(parsed_ip) = ip.parse::<IpAddr>() {
+                    match parsed_ip {
+                        IpAddr::V4(ipv4) => {
+                            if !ipv4.is_loopback() && !ipv4.is_link_local() {
+                                ips.push(ip.to_string());
+                            }
+                        }
+                        IpAddr::V6(ipv6) => {
+                            if !ipv6.is_loopback() && !ipv6.is_unspecified() {
+                                ips.push(ip.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: try to get interface info from /proc/net/route and ifconfig
+    if ips.is_empty() {
+        if let Ok(output) = Command::new("ip")
+            .args(["route", "get", "8.8.8.8"])
+            .output()
+        {
+            if output.status.success() {
+                let route_info = String::from_utf8_lossy(&output.stdout);
+                // Parse "src <IP>" from the output
+                for line in route_info.lines() {
+                    if let Some(src_idx) = line.find("src ") {
+                        let ip_part = &line[src_idx + 4..];
+                        if let Some(ip_end) = ip_part.find(' ') {
+                            let ip = &ip_part[..ip_end];
+                            if let Ok(_) = ip.parse::<IpAddr>() {
+                                ips.push(ip.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if ips.is_empty() {
+        ips.push("127.0.0.1".to_string());
+    }
+
+    ips
+}
+
+// Get Raspberry Pi model information
+fn get_pi_model() -> Option<String> {
+    // Try reading from /proc/device-tree/model first
+    if let Ok(model) = fs::read_to_string("/proc/device-tree/model") {
+        let cleaned = model.trim_end_matches('\0').trim();
+        if !cleaned.is_empty() {
+            return Some(cleaned.to_string());
+        }
+    }
+
+    // Fallback: read from /proc/cpuinfo
+    if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
+        for line in cpuinfo.lines() {
+            if line.starts_with("Model") {
+                if let Some(model) = line.split_once(':') {
+                    return Some(model.1.trim().to_string());
+                }
+            }
+        }
+    }
+
+    None
 }
 
 // Read CPU temperature from Raspberry Pi thermal zone
 fn read_cpu_temperature() -> Result<f32, std::io::Error> {
-    // Try Raspberry Pi thermal zone first
-    if let Ok(temp_str) = fs::read_to_string("/sys/class/thermal/thermal_zone0/temp") {
-        if let Ok(temp_millidegrees) = temp_str.trim().parse::<i32>() {
-            return Ok(temp_millidegrees as f32 / 1000.0);
+    // Pi-specific temperature paths in order of preference
+    let temp_paths = [
+        "/sys/class/thermal/thermal_zone0/temp", // Most common
+        "/sys/devices/virtual/thermal/thermal_zone0/temp", // Alternative path
+        "/sys/class/hwmon/hwmon0/temp1_input",   // Hardware monitor
+        "/sys/class/hwmon/hwmon1/temp1_input",   // Secondary hwmon
+    ];
+
+    // Try Pi-specific paths first
+    for path in &temp_paths {
+        if let Ok(temp_str) = fs::read_to_string(path) {
+            if let Ok(temp_millidegrees) = temp_str.trim().parse::<i32>() {
+                let temp_celsius = temp_millidegrees as f32 / 1000.0;
+                // Sanity check: temperature should be reasonable (0-100°C)
+                if temp_celsius > 0.0 && temp_celsius < 100.0 {
+                    return Ok(temp_celsius);
+                }
+            }
         }
     }
 
-    // Fallback: try common thermal zone files
-    for i in 0..5 {
+    // Try vcgencmd (Raspberry Pi specific)
+    if let Ok(output) = Command::new("vcgencmd").arg("measure_temp").output() {
+        if output.status.success() {
+            let temp_output = String::from_utf8_lossy(&output.stdout);
+            // Parse "temp=XX.X'C" format
+            if let Some(start) = temp_output.find("temp=") {
+                let temp_part = &temp_output[start + 5..];
+                if let Some(end) = temp_part.find("'") {
+                    let temp_str = &temp_part[..end];
+                    if let Ok(temp) = temp_str.parse::<f32>() {
+                        if temp > 0.0 && temp < 100.0 {
+                            return Ok(temp);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Final fallback: try other thermal zones
+    for i in 0..10 {
         let path = format!("/sys/class/thermal/thermal_zone{}/temp", i);
         if let Ok(temp_str) = fs::read_to_string(&path) {
             if let Ok(temp_millidegrees) = temp_str.trim().parse::<i32>() {
-                return Ok(temp_millidegrees as f32 / 1000.0);
+                let temp_celsius = temp_millidegrees as f32 / 1000.0;
+                if temp_celsius > 0.0 && temp_celsius < 100.0 {
+                    return Ok(temp_celsius);
+                }
             }
         }
     }
 
     Err(std::io::Error::new(
         std::io::ErrorKind::NotFound,
-        "No thermal zone found",
+        "No valid thermal zone found",
     ))
 }
 
